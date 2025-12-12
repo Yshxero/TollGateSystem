@@ -41,9 +41,7 @@ class MyApp extends StatelessWidget {
   }
 }
 
-// ==========================================
 // SCREEN 1: WELCOME SCREEN
-// ==========================================
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
 
@@ -84,9 +82,7 @@ class WelcomeScreen extends StatelessWidget {
   }
 }
 
-// ==========================================
 // SCREEN 2: LOG IN PAGE
-// ==========================================
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
 
@@ -154,9 +150,7 @@ class _LoginPageState extends State<LoginPage> {
   }
 }
 
-// ==========================================
 // SCREEN 3: SIGN UP PAGE
-// ==========================================
 class SignUpPage extends StatefulWidget {
   const SignUpPage({super.key});
 
@@ -233,9 +227,7 @@ class _SignUpPageState extends State<SignUpPage> {
   }
 }
 
-// ==========================================
-// SCREEN 4: MAIN CONTAINER (CUSTOM NAV BAR)
-// ==========================================
+// SCREEN 4: MAIN CONTAINER
 class MainContainer extends StatefulWidget {
   final String userName;
   final String userRfid;
@@ -261,7 +253,6 @@ class _MainContainerState extends State<MainContainer> {
     ];
   }
 
-  // --- UPDATED NAVIGATION ITEM BUILDER ---
   Widget _buildNavItem(int index, IconData icon, String label) {
     bool isSelected = _selectedIndex == index;
     
@@ -272,30 +263,27 @@ class _MainContainerState extends State<MainContainer> {
         });
       },
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250), // Smooth Transition speed
+        duration: const Duration(milliseconds: 250),
         curve: Curves.easeInOut,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          // Pink Box appears only when selected
           color: isSelected ? Colors.pinkAccent : Colors.transparent, 
           borderRadius: BorderRadius.circular(15), 
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Icon
             Icon(
               icon, 
-              color: isSelected ? Colors.white : Colors.grey, // White if selected, Grey if not
+              color: isSelected ? Colors.white : Colors.grey,
               size: 26,
             ),
-            const SizedBox(height: 4), // Gap
+            const SizedBox(height: 4),
             
-            // Text (ALWAYS VISIBLE)
             AnimatedDefaultTextStyle(
               duration: const Duration(milliseconds: 250),
               style: TextStyle(
-                color: isSelected ? Colors.white : Colors.grey, // Text color changes smoothly
+                color: isSelected ? Colors.white : Colors.grey,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                 fontSize: 10,
               ),
@@ -312,12 +300,10 @@ class _MainContainerState extends State<MainContainer> {
     return Scaffold(
       body: _pages[_selectedIndex],
       
-      // --- CUSTOM BOTTOM BAR ---
       bottomNavigationBar: Container(
         padding: const EdgeInsets.all(12),
         decoration: const BoxDecoration(
           color: Color(0xFF181928),
-          // ROUNDED TOP CORNERS ONLY
           borderRadius: BorderRadius.only(
             topLeft: Radius.circular(30), 
             topRight: Radius.circular(30),
@@ -344,9 +330,7 @@ class _MainContainerState extends State<MainContainer> {
   }
 }
 
-// ==========================================
 // SCREEN 4.1: DASHBOARD
-// ==========================================
 class DashboardScreen extends StatefulWidget {
   final String userName;
   final String userRfid;
@@ -507,9 +491,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 }
 
-// ==========================================
 // SCREEN 4.2: PROFILE SCREEN
-// ==========================================
 class ProfileScreen extends StatelessWidget {
   final String userName;
   final String userRfid;
