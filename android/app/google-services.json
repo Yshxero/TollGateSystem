@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "580747271694",
+    "project_id": "tollgateapp-5edab",
+    "storage_bucket": "tollgateapp-5edab.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:580747271694:android:6b2a0da1b4aaf28d9da65f",
+        "android_client_info": {
+          "package_name": "com.example.embedded_system_tgs"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBsFQY5HmdQRRPGp1BbEg6JVtE7XAv0KXc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
