@@ -55,7 +55,7 @@ class WelcomeScreen extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Icon(Icons.toll, size: 100, color: Color(0xFF69F0AE)),
+              Image.asset('assets/logo.png', height: 120,),
               const SizedBox(height: 20),
               const Text(
                 "TOLL GATE SYSTEM",
