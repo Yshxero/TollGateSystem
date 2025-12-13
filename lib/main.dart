@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
+import 'package:firebase_database/firebase_database.dart';
 import 'firebase_options.dart';
+
+const String databaseUrl =
+    'https://tollgateapp-5edab-default-rtdb.asia-southeast1.firebasedatabase.app/';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   runApp(const MyApp());
 }
 
@@ -55,24 +57,83 @@ class WelcomeScreen extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Image.asset('assets/logo.png', height: 120,),
+              Container(
+                width: 160,
+                height: 160,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: const LinearGradient(
+                    colors: [Colors.pinkAccent, Color(0xFF69F0AE)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.pinkAccent.withOpacity(0.5),
+                      blurRadius: 40,
+                      offset: const Offset(-5, -5),
+                    ),
+                    BoxShadow(
+                      color: const Color(0xFF69F0AE).withOpacity(0.5),
+                      blurRadius: 40,
+                      offset: const Offset(5, 5),
+                    ),
+                  ],
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(6.0),
+                  child: Container(
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Color(0xFF181928),
+                    ),
+                    child: const Center(
+                      child: Icon(Icons.toll, size: 70, color: Colors.white),
+                    ),
+                  ),
+                ),
+              ),
               const SizedBox(height: 20),
               const Text(
                 "TOLL GATE SYSTEM",
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const SizedBox(height: 60),
               ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF69F0AE), foregroundColor: Colors.black, padding: const EdgeInsets.symmetric(vertical: 15)),
-                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const LoginPage())),
-                child: const Text("LOG IN", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF69F0AE),
+                  foregroundColor: Colors.black,
+                  padding: const EdgeInsets.symmetric(vertical: 15),
+                ),
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const LoginPage()),
+                ),
+                child: const Text(
+                  "LOG IN",
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
               ),
               const SizedBox(height: 20),
               OutlinedButton(
-                style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.pinkAccent, width: 2), foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 15)),
-                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const SignUpPage())),
-                child: const Text("CREATE ACCOUNT", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Colors.pinkAccent, width: 2),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 15),
+                ),
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const SignUpPage()),
+                ),
+                child: const Text(
+                  "CREATE ACCOUNT",
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
               ),
             ],
           ),
@@ -101,22 +162,38 @@ class _LoginPageState extends State<LoginPage> {
     setState(() => isLoading = true);
 
     try {
-      var querySnapshot = await FirebaseFirestore.instance.collection('users').where('rfid', isEqualTo: rfid).get();
+      // 1. Check FIRESTORE for user details (Authentication logic)
+      var querySnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .where('rfid', isEqualTo: rfid)
+          .get();
+
       if (querySnapshot.docs.isNotEmpty) {
         var userData = querySnapshot.docs.first.data();
         String name = userData['firstName'];
+
+        // 2. If user exists in Firestore, proceed to Dashboard
         if (mounted) {
           Navigator.pushAndRemoveUntil(
             context,
-            MaterialPageRoute(builder: (context) => MainContainer(userName: name, userRfid: rfid)),
+            MaterialPageRoute(
+              builder: (context) =>
+                  MainContainer(userName: name, userRfid: rfid),
+            ),
             (route) => false,
           );
         }
       } else {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("RFID not found! Please register.")));
+        if (mounted)
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("RFID not found! Please register.")),
+          );
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("Error: $e")));
     }
     setState(() => isLoading = false);
   }
@@ -124,13 +201,23 @@ class _LoginPageState extends State<LoginPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(backgroundColor: Colors.transparent, iconTheme: const IconThemeData(color: Colors.white)),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        iconTheme: const IconThemeData(color: Colors.white),
+      ),
       body: Padding(
         padding: const EdgeInsets.all(24.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text("Login", style: TextStyle(color: Colors.white, fontSize: 30, fontWeight: FontWeight.bold)),
+            const Text(
+              "Login",
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 30,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
             const SizedBox(height: 40),
             MyTextField(controller: rfidController, label: "Scan RFID Number"),
             const SizedBox(height: 40),
@@ -138,9 +225,19 @@ class _LoginPageState extends State<LoginPage> {
               width: double.infinity,
               height: 50,
               child: ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF69F0AE)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF69F0AE),
+                ),
                 onPressed: isLoading ? null : login,
-                child: isLoading ? const CircularProgressIndicator(color: Colors.black) : const Text("LOG IN", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                child: isLoading
+                    ? const CircularProgressIndicator(color: Colors.black)
+                    : const Text(
+                        "LOG IN",
+                        style: TextStyle(
+                          color: Colors.black,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
               ),
             ),
           ],
@@ -168,29 +265,50 @@ class _SignUpPageState extends State<SignUpPage> {
 
   void register() async {
     if (fName.text.isEmpty || rfid.text.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Name and RFID are required")));
-        return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Name and RFID are required")),
+      );
+      return;
     }
     setState(() => isLoading = true);
     try {
+      // 1. Save Profile to FIRESTORE
       await FirebaseFirestore.instance.collection('users').add({
         'firstName': fName.text,
         'lastName': lName.text,
         'age': age.text,
         'sex': sex.text,
         'rfid': rfid.text,
-        'balance': 0, 
         'createdAt': FieldValue.serverTimestamp(),
       });
+
+      // 2. Initialize Balance in REALTIME DATABASE
+      // Structure: balances -> RFID -> balance
+      final dbRef = FirebaseDatabase.instanceFor(
+        app: Firebase.app(),
+        databaseURL: databaseUrl,
+      ).ref();
+
+      await dbRef.child('balances/${rfid.text}').set({
+        'balance': 0, // <--- Key is now 'balance'
+        'lastUpdated': DateTime.now().toIso8601String(),
+      });
+
       if (mounted) {
         Navigator.pushAndRemoveUntil(
           context,
-          MaterialPageRoute(builder: (context) => MainContainer(userName: fName.text, userRfid: rfid.text)),
+          MaterialPageRoute(
+            builder: (context) =>
+                MainContainer(userName: fName.text, userRfid: rfid.text),
+          ),
           (route) => false,
         );
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("Error: $e")));
     }
     setState(() => isLoading = false);
   }
@@ -198,16 +316,50 @@ class _SignUpPageState extends State<SignUpPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(backgroundColor: Colors.transparent, iconTheme: const IconThemeData(color: Colors.white)),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        iconTheme: const IconThemeData(color: Colors.white),
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),
         child: Column(
           children: [
-            const Text("Create Account", style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+            const Text(
+              "Create Account",
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
             const SizedBox(height: 30),
-            Row(children: [Expanded(child: MyTextField(controller: fName, label: "First Name")), const SizedBox(width: 10), Expanded(child: MyTextField(controller: lName, label: "Last Name"))]),
+            Row(
+              children: [
+                Expanded(
+                  child: MyTextField(controller: fName, label: "First Name"),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: MyTextField(controller: lName, label: "Last Name"),
+                ),
+              ],
+            ),
             const SizedBox(height: 15),
-            Row(children: [Expanded(child: MyTextField(controller: age, label: "Age", isNumber: true)), const SizedBox(width: 10), Expanded(child: MyTextField(controller: sex, label: "Sex"))]),
+            Row(
+              children: [
+                Expanded(
+                  child: MyTextField(
+                    controller: age,
+                    label: "Age",
+                    isNumber: true,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: MyTextField(controller: sex, label: "Sex"),
+                ),
+              ],
+            ),
             const SizedBox(height: 15),
             MyTextField(controller: rfid, label: "RFID Number"),
             const SizedBox(height: 40),
@@ -215,9 +367,19 @@ class _SignUpPageState extends State<SignUpPage> {
               width: double.infinity,
               height: 50,
               child: ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.pinkAccent),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.pinkAccent,
+                ),
                 onPressed: isLoading ? null : register,
-                child: isLoading ? const CircularProgressIndicator(color: Colors.white) : const Text("REGISTER", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                child: isLoading
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : const Text(
+                        "REGISTER",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
               ),
             ),
           ],
@@ -232,7 +394,11 @@ class MainContainer extends StatefulWidget {
   final String userName;
   final String userRfid;
 
-  const MainContainer({super.key, required this.userName, required this.userRfid});
+  const MainContainer({
+    super.key,
+    required this.userName,
+    required this.userRfid,
+  });
 
   @override
   State<MainContainer> createState() => _MainContainerState();
@@ -255,7 +421,7 @@ class _MainContainerState extends State<MainContainer> {
 
   Widget _buildNavItem(int index, IconData icon, String label) {
     bool isSelected = _selectedIndex == index;
-    
+
     return GestureDetector(
       onTap: () {
         setState(() {
@@ -267,19 +433,18 @@ class _MainContainerState extends State<MainContainer> {
         curve: Curves.easeInOut,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? Colors.pinkAccent : Colors.transparent, 
-          borderRadius: BorderRadius.circular(15), 
+          color: isSelected ? Colors.pinkAccent : Colors.transparent,
+          borderRadius: BorderRadius.circular(15),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              icon, 
+              icon,
               color: isSelected ? Colors.white : Colors.grey,
               size: 26,
             ),
             const SizedBox(height: 4),
-            
             AnimatedDefaultTextStyle(
               duration: const Duration(milliseconds: 250),
               style: TextStyle(
@@ -299,25 +464,20 @@ class _MainContainerState extends State<MainContainer> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: _pages[_selectedIndex],
-      
       bottomNavigationBar: Container(
         padding: const EdgeInsets.all(12),
         decoration: const BoxDecoration(
           color: Color(0xFF181928),
           borderRadius: BorderRadius.only(
-            topLeft: Radius.circular(30), 
+            topLeft: Radius.circular(30),
             topRight: Radius.circular(30),
           ),
           boxShadow: [
-            BoxShadow(
-              color: Colors.black26,
-              blurRadius: 10,
-              spreadRadius: 2,
-            )
+            BoxShadow(color: Colors.black26, blurRadius: 10, spreadRadius: 2),
           ],
         ),
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround, // Spread items evenly
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
             _buildNavItem(0, Icons.dashboard, "Home"),
             _buildNavItem(1, Icons.history, "History"),
@@ -335,13 +495,18 @@ class DashboardScreen extends StatefulWidget {
   final String userName;
   final String userRfid;
 
-  const DashboardScreen({super.key, required this.userName, required this.userRfid});
+  const DashboardScreen({
+    super.key,
+    required this.userName,
+    required this.userRfid,
+  });
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
+  // Function to add balance via Realtime Database
   void showAddBalanceDialog() {
     TextEditingController amountController = TextEditingController();
     showDialog(
@@ -349,27 +514,53 @@ class _DashboardScreenState extends State<DashboardScreen> {
       builder: (context) {
         return AlertDialog(
           backgroundColor: const Color(0xFF2E1C38),
-          title: const Text("Load Balance", style: TextStyle(color: Colors.white)),
+          title: const Text(
+            "Load Balance",
+            style: TextStyle(color: Colors.white),
+          ),
           content: TextField(
             controller: amountController,
             keyboardType: TextInputType.number,
             style: const TextStyle(color: Colors.white),
-            decoration: const InputDecoration(labelText: "Enter Amount", prefixText: "₱ ", prefixStyle: TextStyle(color: Color(0xFF69F0AE))),
+            decoration: const InputDecoration(
+              labelText: "Enter Amount",
+              prefixText: "₱ ",
+              prefixStyle: TextStyle(color: Color(0xFF69F0AE)),
+            ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel", style: TextStyle(color: Colors.grey))),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
+            ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.pinkAccent),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.pinkAccent,
+              ),
               onPressed: () async {
                 if (amountController.text.isNotEmpty) {
                   int addAmount = int.parse(amountController.text);
-                  var query = await FirebaseFirestore.instance.collection('users').where('rfid', isEqualTo: widget.userRfid).get();
-                  if (query.docs.isNotEmpty) {
-                    var docId = query.docs.first.id;
-                    int currentBal = query.docs.first.data()['balance'] ?? 0;
-                    await FirebaseFirestore.instance.collection('users').doc(docId).update({'balance': currentBal + addAmount});
-                    if (mounted) Navigator.pop(context);
-                  }
+
+                  final dbRef = FirebaseDatabase.instanceFor(
+                    app: Firebase.app(),
+                    databaseURL: databaseUrl,
+                  ).ref();
+
+                  // Point to 'balances/RFID/balance'
+                  final balanceRef = dbRef.child(
+                    'balances/${widget.userRfid}/balance',
+                  );
+
+                  // Transaction to safely update balance
+                  await balanceRef.runTransaction((Object? post) {
+                    if (post == null) {
+                      return Transaction.success(addAmount);
+                    }
+                    int currentBalance = (post as int);
+                    return Transaction.success(currentBalance + addAmount);
+                  });
+
+                  if (mounted) Navigator.pop(context);
                 }
               },
               child: const Text("LOAD", style: TextStyle(color: Colors.white)),
@@ -407,13 +598,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Hello, ${widget.userName}', 
-                        style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold)
+                        'Hello, ${widget.userName}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                       const SizedBox(height: 5),
                       Text(
-                        'RFID: ${widget.userRfid}', 
-                        style: const TextStyle(color: Colors.white70, fontSize: 16)
+                        'RFID: ${widget.userRfid}',
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 16,
+                        ),
                       ),
                     ],
                   ),
@@ -423,57 +621,120 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       color: Colors.white.withOpacity(0.2),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.notifications, color: Colors.white, size: 30),
+                    child: const Icon(
+                      Icons.notifications,
+                      color: Colors.white,
+                      size: 30,
+                    ),
                   ),
                 ],
               ),
             ),
-
             const SizedBox(height: 40),
-            
-            StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance.collection('users').where('rfid', isEqualTo: widget.userRfid).snapshots(),
+
+            // STREAM FROM REALTIME DATABASE
+            StreamBuilder<DatabaseEvent>(
+              // Listen to the specific path: balances/RFID
+              stream: FirebaseDatabase.instanceFor(
+                app: Firebase.app(),
+                databaseURL: databaseUrl,
+              ).ref('balances/${widget.userRfid}').onValue,
               builder: (context, snapshot) {
-                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                  return const CircularProgressIndicator(color: Colors.pinkAccent);
+                if (snapshot.hasError) {
+                  return const Text(
+                    "Error loading data",
+                    style: TextStyle(color: Colors.red),
+                  );
                 }
-                var userDoc = snapshot.data!.docs.first;
-                int balance = userDoc['balance'] ?? 0;
+
+                int balance = 0;
+
+                if (snapshot.hasData && snapshot.data!.snapshot.value != null) {
+                  // Parse the data using 'balance' as key
+                  final data =
+                      snapshot.data!.snapshot.value as Map<dynamic, dynamic>;
+                  balance = data['balance'] ?? 0;
+                }
 
                 return Center(
                   child: Container(
-                    height: 280, width: 280,
+                    height: 280,
+                    width: 280,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: const Color(0xFF222232),
                       boxShadow: [
-                         BoxShadow(color: const Color(0xFF69F0AE).withOpacity(0.2), blurRadius: 20, spreadRadius: 5),
-                         BoxShadow(color: Colors.pinkAccent.withOpacity(0.2), blurRadius: 20, spreadRadius: 5),
+                        BoxShadow(
+                          color: const Color(0xFF69F0AE).withOpacity(0.2),
+                          blurRadius: 20,
+                          spreadRadius: 5,
+                        ),
+                        BoxShadow(
+                          color: Colors.pinkAccent.withOpacity(0.2),
+                          blurRadius: 20,
+                          spreadRadius: 5,
+                        ),
                       ],
-                      gradient: const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFF222232), Color(0xFF222232)]),
+                      gradient: const LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [Color(0xFF222232), Color(0xFF222232)],
+                      ),
                       border: Border.all(width: 5, style: BorderStyle.solid),
                     ),
                     child: Container(
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        gradient: const LinearGradient(colors: [Colors.pinkAccent, Color(0xFF69F0AE)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+                        gradient: const LinearGradient(
+                          colors: [Colors.pinkAccent, Color(0xFF69F0AE)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
                       ),
                       child: Padding(
                         padding: const EdgeInsets.all(5.0),
                         child: Container(
-                          decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFF181928)),
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Color(0xFF181928),
+                          ),
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              const Text("Available Balance", style: TextStyle(color: Colors.white70)),
+                              const Text(
+                                "Available Balance",
+                                style: TextStyle(color: Colors.white70),
+                              ),
                               const SizedBox(height: 10),
-                              Text("$balance", style: const TextStyle(color: Colors.white, fontSize: 60, fontWeight: FontWeight.bold)),
-                              const Text("PTS", style: TextStyle(color: Color(0xFF69F0AE), fontSize: 24, fontWeight: FontWeight.bold)),
+                              Text(
+                                "$balance",
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 60,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const Text(
+                                "PTS",
+                                style: TextStyle(
+                                  color: Color(0xFF69F0AE),
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
                               const SizedBox(height: 20),
                               ElevatedButton(
-                                style: ElevatedButton.styleFrom(backgroundColor: Colors.pinkAccent, shape: const CircleBorder(), padding: const EdgeInsets.all(12)),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.pinkAccent,
+                                  shape: const CircleBorder(),
+                                  padding: const EdgeInsets.all(12),
+                                ),
                                 onPressed: showAddBalanceDialog,
-                                child: const Icon(Icons.add, color: Colors.white, size: 30),
+                                child: const Icon(
+                                  Icons.add,
+                                  color: Colors.white,
+                                  size: 30,
+                                ),
                               ),
                             ],
                           ),
@@ -496,7 +757,11 @@ class ProfileScreen extends StatelessWidget {
   final String userName;
   final String userRfid;
 
-  const ProfileScreen({super.key, required this.userName, required this.userRfid});
+  const ProfileScreen({
+    super.key,
+    required this.userName,
+    required this.userRfid,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -514,17 +779,33 @@ class ProfileScreen extends StatelessWidget {
                 child: Icon(Icons.person, size: 60, color: Colors.pinkAccent),
               ),
               const SizedBox(height: 20),
-              Text(userName, style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold)),
-              Text("RFID: $userRfid", style: const TextStyle(color: Colors.grey, fontSize: 16)),
+              Text(
+                userName,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              Text(
+                "RFID: $userRfid",
+                style: const TextStyle(color: Colors.grey, fontSize: 16),
+              ),
               const SizedBox(height: 60),
               ListTile(
                 leading: const Icon(Icons.settings, color: Colors.white),
-                title: const Text("Account Settings", style: TextStyle(color: Colors.white)),
+                title: const Text(
+                  "Account Settings",
+                  style: TextStyle(color: Colors.white),
+                ),
                 onTap: () {},
               ),
               ListTile(
                 leading: const Icon(Icons.help, color: Colors.white),
-                title: const Text("Help & Support", style: TextStyle(color: Colors.white)),
+                title: const Text(
+                  "Help & Support",
+                  style: TextStyle(color: Colors.white),
+                ),
                 onTap: () {},
               ),
               const Spacer(),
@@ -534,17 +815,28 @@ class ProfileScreen extends StatelessWidget {
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.redAccent,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(15),
+                    ),
                   ),
                   onPressed: () {
                     Navigator.pushAndRemoveUntil(
                       context,
-                      MaterialPageRoute(builder: (context) => const WelcomeScreen()),
+                      MaterialPageRoute(
+                        builder: (context) => const WelcomeScreen(),
+                      ),
                       (route) => false,
                     );
                   },
                   icon: const Icon(Icons.logout, color: Colors.white),
-                  label: const Text("LOGOUT", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                  label: const Text(
+                    "LOGOUT",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(height: 20),
@@ -568,7 +860,10 @@ class PlaceholderScreen extends StatelessWidget {
         children: [
           Icon(icon, size: 80, color: Colors.pinkAccent),
           const SizedBox(height: 20),
-          Text(title, style: const TextStyle(color: Colors.white, fontSize: 24)),
+          Text(
+            title,
+            style: const TextStyle(color: Colors.white, fontSize: 24),
+          ),
           const Text("Coming Soon", style: TextStyle(color: Colors.grey)),
         ],
       ),
@@ -580,7 +875,12 @@ class MyTextField extends StatelessWidget {
   final TextEditingController controller;
   final String label;
   final bool isNumber;
-  const MyTextField({super.key, required this.controller, required this.label, this.isNumber = false});
+  const MyTextField({
+    super.key,
+    required this.controller,
+    required this.label,
+    this.isNumber = false,
+  });
   @override
   Widget build(BuildContext context) {
     return TextField(
