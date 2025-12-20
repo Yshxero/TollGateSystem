@@ -192,29 +192,47 @@ class _LoginPageState extends State<LoginPage> {
 
       if (querySnapshot.docs.isNotEmpty) {
         var userData = querySnapshot.docs.first.data();
+
+        String role = userData['role'];
         String name = userData['firstName'];
-        if (mounted) {
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(
-              builder: (context) =>
-                  MainContainer(userName: name, userRfid: rfid),
-            ),
-            (route) => false,
-          );
+
+        if (role != 'user') {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  "This account is not a USER, please LOGIN to your user account.",
+                ),
+              ),
+            );
+          }
+        } else {
+          if (mounted) {
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(
+                builder: (context) =>
+                    MainContainer(userName: name, userRfid: rfid),
+              ),
+              (route) => false,
+            );
+          }
         }
       } else {
-        if (mounted)
+        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text("RFID not found! Please register.")),
           );
+        }
       }
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text("Error: $e")));
+      }
     }
+
     setState(() => isLoading = false);
   }
 
@@ -239,7 +257,7 @@ class _LoginPageState extends State<LoginPage> {
               ),
             ),
             const SizedBox(height: 40),
-            MyTextField(controller: rfidController, label: "Scan RFID Number"),
+            MyTextField(controller: rfidController, label: "RFID Number"),
             const SizedBox(height: 40),
             SizedBox(
               width: double.infinity,
@@ -755,7 +773,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     const SizedBox(height: 30),
                     Image.network(
                       'https://raw.githubusercontent.com/Yshxero/TollGateSystem/main/assets/LogoUser.png',
-                      width: 300,
+                      width: 500,
                       height: 300,
                       fit: BoxFit.contain,
                     ),
@@ -1172,7 +1190,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
               const SizedBox(height: 40),
 
-              /// 🔄 Refresh button
               Center(
                 child: ElevatedButton.icon(
                   onPressed: loadBalance,
@@ -1191,6 +1208,15 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       vertical: 15,
                     ),
                   ),
+                ),
+              ),
+              const SizedBox(height: 30),
+              Center(
+                child: Image.network(
+                  'https://raw.githubusercontent.com/Yshxero/TollGateSystem/main/assets/LogoAdminC.png',
+                  width: 400,
+                  height: 200,
+                  fit: BoxFit.contain,
                 ),
               ),
             ],
