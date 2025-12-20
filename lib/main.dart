@@ -58,8 +58,8 @@ class WelcomeScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Container(
-                width: 160,
-                height: 160,
+                width: 300,
+                height: 300,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   gradient: const LinearGradient(
@@ -87,8 +87,13 @@ class WelcomeScreen extends StatelessWidget {
                       shape: BoxShape.circle,
                       color: Color(0xFF181928),
                     ),
-                    child: const Center(
-                      child: Icon(Icons.toll, size: 70, color: Colors.white),
+                    child: Center(
+                      child: Image.network(
+                        'https://raw.githubusercontent.com/Yshxero/TollGateSystem/main/assets/LogoWelcome.png',
+                        width: 200,
+                        height: 200,
+                        fit: BoxFit.contain,
+                      ),
                     ),
                   ),
                 ),
@@ -117,6 +122,24 @@ class WelcomeScreen extends StatelessWidget {
                 child: const Text(
                   "LOG IN",
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+              ),
+              const SizedBox(height: 20),
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Color(0xFF69F0AE), width: 2),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 15),
+                ),
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const AdminLoginPage(),
+                  ),
+                ),
+                label: const Text(
+                  "LOGIN AS ADMIN",
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
               ),
               const SizedBox(height: 20),
@@ -162,7 +185,6 @@ class _LoginPageState extends State<LoginPage> {
     setState(() => isLoading = true);
 
     try {
-      // 1. Check FIRESTORE for user details (Authentication logic)
       var querySnapshot = await FirebaseFirestore.instance
           .collection('users')
           .where('rfid', isEqualTo: rfid)
@@ -171,8 +193,6 @@ class _LoginPageState extends State<LoginPage> {
       if (querySnapshot.docs.isNotEmpty) {
         var userData = querySnapshot.docs.first.data();
         String name = userData['firstName'];
-
-        // 2. If user exists in Firestore, proceed to Dashboard
         if (mounted) {
           Navigator.pushAndRemoveUntil(
             context,
@@ -272,25 +292,23 @@ class _SignUpPageState extends State<SignUpPage> {
     }
     setState(() => isLoading = true);
     try {
-      // 1. Save Profile to FIRESTORE
       await FirebaseFirestore.instance.collection('users').add({
         'firstName': fName.text,
         'lastName': lName.text,
         'age': age.text,
         'sex': sex.text,
         'rfid': rfid.text,
+        'role': 'user',
         'createdAt': FieldValue.serverTimestamp(),
       });
 
-      // 2. Initialize Balance in REALTIME DATABASE
-      // Structure: balances -> RFID -> balance
       final dbRef = FirebaseDatabase.instanceFor(
         app: Firebase.app(),
         databaseURL: databaseUrl,
       ).ref();
 
       await dbRef.child('balances/${rfid.text}').set({
-        'balance': 0, // <--- Key is now 'balance'
+        'balance': 0,
         'lastUpdated': DateTime.now().toIso8601String(),
       });
 
@@ -506,7 +524,6 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  // Function to add balance via Realtime Database
   void showAddBalanceDialog() {
     TextEditingController amountController = TextEditingController();
     showDialog(
@@ -546,12 +563,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     databaseURL: databaseUrl,
                   ).ref();
 
-                  // Point to 'balances/RFID/balance'
                   final balanceRef = dbRef.child(
                     'balances/${widget.userRfid}/balance',
                   );
 
-                  // Transaction to safely update balance
                   await balanceRef.runTransaction((Object? post) {
                     if (post == null) {
                       return Transaction.success(addAmount);
@@ -632,9 +647,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
             const SizedBox(height: 40),
 
-            // STREAM FROM REALTIME DATABASE
             StreamBuilder<DatabaseEvent>(
-              // Listen to the specific path: balances/RFID
               stream: FirebaseDatabase.instanceFor(
                 app: Firebase.app(),
                 databaseURL: databaseUrl,
@@ -650,98 +663,103 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 int balance = 0;
 
                 if (snapshot.hasData && snapshot.data!.snapshot.value != null) {
-                  // Parse the data using 'balance' as key
                   final data =
                       snapshot.data!.snapshot.value as Map<dynamic, dynamic>;
                   balance = data['balance'] ?? 0;
                 }
 
-                return Center(
-                  child: Container(
-                    height: 280,
-                    width: 280,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: const Color(0xFF222232),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF69F0AE).withOpacity(0.2),
-                          blurRadius: 20,
-                          spreadRadius: 5,
+                return Column(
+                  children: [
+                    Center(
+                      child: Container(
+                        height: 280,
+                        width: 280,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: const Color(0xFF222232),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF69F0AE).withOpacity(0.2),
+                              blurRadius: 20,
+                              spreadRadius: 5,
+                            ),
+                            BoxShadow(
+                              color: Colors.pinkAccent.withOpacity(0.2),
+                              blurRadius: 20,
+                              spreadRadius: 5,
+                            ),
+                          ],
+                          border: Border.all(width: 5),
                         ),
-                        BoxShadow(
-                          color: Colors.pinkAccent.withOpacity(0.2),
-                          blurRadius: 20,
-                          spreadRadius: 5,
-                        ),
-                      ],
-                      gradient: const LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [Color(0xFF222232), Color(0xFF222232)],
-                      ),
-                      border: Border.all(width: 5, style: BorderStyle.solid),
-                    ),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: const LinearGradient(
-                          colors: [Colors.pinkAccent, Color(0xFF69F0AE)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(5.0),
                         child: Container(
-                          decoration: const BoxDecoration(
+                          decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: Color(0xFF181928),
+                            gradient: const LinearGradient(
+                              colors: [Colors.pinkAccent, Color(0xFF69F0AE)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
                           ),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Text(
-                                "Available Balance",
-                                style: TextStyle(color: Colors.white70),
+                          child: Padding(
+                            padding: const EdgeInsets.all(5.0),
+                            child: Container(
+                              decoration: const BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Color(0xFF181928),
                               ),
-                              const SizedBox(height: 10),
-                              Text(
-                                "$balance",
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 60,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Text(
+                                    "Available Balance",
+                                    style: TextStyle(color: Color(0xFF69F0AE)),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Text(
+                                    "$balance",
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 60,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const Text(
+                                    "PTS",
+                                    style: TextStyle(
+                                      color: Color(0xFF69F0AE),
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 20),
+                                  ElevatedButton(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.pinkAccent,
+                                      shape: const CircleBorder(),
+                                      padding: const EdgeInsets.all(12),
+                                    ),
+                                    onPressed: showAddBalanceDialog,
+                                    child: const Icon(
+                                      Icons.add,
+                                      color: Colors.white,
+                                      size: 30,
+                                    ),
+                                  ),
+                                ],
                               ),
-                              const Text(
-                                "PTS",
-                                style: TextStyle(
-                                  color: Color(0xFF69F0AE),
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(height: 20),
-                              ElevatedButton(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.pinkAccent,
-                                  shape: const CircleBorder(),
-                                  padding: const EdgeInsets.all(12),
-                                ),
-                                onPressed: showAddBalanceDialog,
-                                child: const Icon(
-                                  Icons.add,
-                                  color: Colors.white,
-                                  size: 30,
-                                ),
-                              ),
-                            ],
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  ),
+                    const SizedBox(height: 30),
+                    Image.network(
+                      'https://raw.githubusercontent.com/Yshxero/TollGateSystem/main/assets/LogoUser.png',
+                      width: 300,
+                      height: 300,
+                      fit: BoxFit.contain,
+                    ),
+                  ],
                 );
               },
             ),
@@ -888,6 +906,297 @@ class MyTextField extends StatelessWidget {
       keyboardType: isNumber ? TextInputType.number : TextInputType.text,
       style: const TextStyle(color: Colors.white),
       decoration: InputDecoration(labelText: label),
+    );
+  }
+}
+
+class AdminLoginPage extends StatefulWidget {
+  const AdminLoginPage({super.key});
+
+  @override
+  State<AdminLoginPage> createState() => _AdminLoginPageState();
+}
+
+class _AdminLoginPageState extends State<AdminLoginPage> {
+  final TextEditingController rfidController = TextEditingController();
+  bool isLoading = false;
+
+  void adminLogin() async {
+    if (rfidController.text.isEmpty) return;
+
+    setState(() => isLoading = true);
+
+    try {
+      final query = await FirebaseFirestore.instance
+          .collection('users')
+          .where('rfid', isEqualTo: rfidController.text)
+          .where('role', isEqualTo: 'admin')
+          .get();
+
+      if (query.docs.isNotEmpty) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const AdminDashboard()),
+          (route) => false,
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Access denied. Admins only.")),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Error: $e")));
+    }
+
+    setState(() => isLoading = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        iconTheme: const IconThemeData(color: Colors.white),
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Text(
+              "Admin Login",
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 30),
+            MyTextField(
+              controller: rfidController,
+              label: "Admin Account Number",
+            ),
+            const SizedBox(height: 30),
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.pinkAccent,
+                ),
+                onPressed: isLoading ? null : adminLogin,
+                child: isLoading
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : const Text(
+                        "LOGIN",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class AdminDashboard extends StatefulWidget {
+  const AdminDashboard({super.key});
+
+  @override
+  State<AdminDashboard> createState() => _AdminDashboardState();
+}
+
+class _AdminDashboardState extends State<AdminDashboard> {
+  int adminBalance = 0;
+
+  final dbRef = FirebaseDatabase.instanceFor(
+    app: Firebase.app(),
+    databaseURL: databaseUrl,
+  ).ref('balances/admin/balance');
+
+  void loadBalance() async {
+    final snapshot = await dbRef.get();
+    setState(() {
+      adminBalance = snapshot.value != null ? snapshot.value as int : 0;
+    });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    loadBalance();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF181928),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout, color: Colors.white),
+            onPressed: () {
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(builder: (_) => const WelcomeScreen()),
+                (route) => false,
+              );
+            },
+          ),
+        ],
+      ),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(top: 20),
+                padding: const EdgeInsets.all(25.0),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Colors.pinkAccent, Colors.purpleAccent],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(30),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.pinkAccent.withOpacity(0.4),
+                      blurRadius: 20,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: const [
+                        Text(
+                          'Hello, Admin',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        SizedBox(height: 5),
+                        Text(
+                          'Toll Gate System',
+                          style: TextStyle(color: Colors.white70, fontSize: 16),
+                        ),
+                      ],
+                    ),
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.admin_panel_settings,
+                        color: Colors.white,
+                        size: 30,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 40),
+
+              Center(
+                child: Container(
+                  height: 260,
+                  width: 260,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: const LinearGradient(
+                      colors: [Colors.pinkAccent, Color(0xFF69F0AE)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(6),
+                    child: Container(
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Color(0xFF181928),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Text(
+                            "TOTAL TOLL COLLECTED",
+                            style: TextStyle(
+                              color: Color(0xFF69F0AE),
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            "$adminBalance",
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 56,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const Text(
+                            "PTS",
+                            style: TextStyle(
+                              color: Colors.pinkAccent,
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 40),
+
+              /// 🔄 Refresh button
+              Center(
+                child: ElevatedButton.icon(
+                  onPressed: loadBalance,
+                  icon: const Icon(Icons.refresh, color: Colors.black),
+                  label: const Text(
+                    "REFRESH",
+                    style: TextStyle(
+                      color: Colors.black,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF69F0AE),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 30,
+                      vertical: 15,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
