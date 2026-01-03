@@ -3,6 +3,8 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
 import 'package:firebase_database/firebase_database.dart';
 import 'firebase_options.dart';
+import 'internet_service.dart';
+import 'internet_guard.dart';
 
 const String databaseUrl =
     'https://tollgateapp-5edab-default-rtdb.asia-southeast1.firebasedatabase.app/';
@@ -10,6 +12,9 @@ const String databaseUrl =
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  InternetService().initialize();
+
   runApp(const MyApp());
 }
 
@@ -18,27 +23,26 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'Toll Gate App',
-      theme: ThemeData(
-        scaffoldBackgroundColor: const Color(0xFF181928),
-        useMaterial3: true,
-        inputDecorationTheme: InputDecorationTheme(
-          filled: true,
-          fillColor: const Color(0xFF2E1C38),
-          labelStyle: const TextStyle(color: Colors.white70),
-          enabledBorder: OutlineInputBorder(
-            borderSide: const BorderSide(color: Colors.white10),
-            borderRadius: BorderRadius.circular(10),
+    return StreamBuilder<bool>(
+      stream: InternetService().internetStatus,
+      initialData: true,
+      builder: (context, snapshot) {
+        final hasInternet = snapshot.data ?? true;
+
+        return MaterialApp(
+          debugShowCheckedModeBanner: false,
+          title: 'Toll Gate App',
+          theme: ThemeData(
+            scaffoldBackgroundColor: const Color(0xFF181928),
+            useMaterial3: true,
           ),
-          focusedBorder: OutlineInputBorder(
-            borderSide: const BorderSide(color: Color(0xFF69F0AE)),
-            borderRadius: BorderRadius.circular(10),
+          home: InternetGuard(
+            child: hasInternet
+                ? const WelcomeScreen()
+                : const NoInternetScreen(),
           ),
-        ),
-      ),
-      home: const WelcomeScreen(),
+        );
+      },
     );
   }
 }
@@ -179,6 +183,37 @@ class _LoginPageState extends State<LoginPage> {
   bool isLoading = false;
 
   void login() async {
+    bool online = await InternetService().hasInternet();
+
+    if (!online) {
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (_) => AlertDialog(
+            backgroundColor: const Color(0xFF2E1C38),
+            title: const Text(
+              "No Internet Connection",
+              style: TextStyle(color: Colors.white),
+            ),
+            content: const Text(
+              "Please connect to the internet to log in.",
+              style: TextStyle(color: Colors.white70),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text(
+                  "OK",
+                  style: TextStyle(color: Colors.pinkAccent),
+                ),
+              ),
+            ],
+          ),
+        );
+      }
+      return;
+    }
+
     String rfid = rfidController.text.trim();
     if (rfid.isEmpty) return;
 
@@ -449,7 +484,7 @@ class _MainContainerState extends State<MainContainer> {
     super.initState();
     _pages = [
       DashboardScreen(userName: widget.userName, userRfid: widget.userRfid),
-      const PlaceholderScreen(title: "History", icon: Icons.history),
+      HistoryScreen(userRfid: widget.userRfid),
       const PlaceholderScreen(title: "Reload Stations", icon: Icons.map),
       ProfileScreen(userName: widget.userName, userRfid: widget.userRfid),
     ];
@@ -544,9 +579,10 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   void showAddBalanceDialog() {
     TextEditingController amountController = TextEditingController();
+
     showDialog(
       context: context,
-      builder: (context) {
+      builder: (dialogContext) {
         return AlertDialog(
           backgroundColor: const Color(0xFF2E1C38),
           title: const Text(
@@ -565,38 +601,102 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () => Navigator.pop(dialogContext),
               child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.pinkAccent,
               ),
-              onPressed: () async {
-                if (amountController.text.isNotEmpty) {
-                  int addAmount = int.parse(amountController.text);
-
-                  final dbRef = FirebaseDatabase.instanceFor(
-                    app: Firebase.app(),
-                    databaseURL: databaseUrl,
-                  ).ref();
-
-                  final balanceRef = dbRef.child(
-                    'balances/${widget.userRfid}/balance',
-                  );
-
-                  await balanceRef.runTransaction((Object? post) {
-                    if (post == null) {
-                      return Transaction.success(addAmount);
-                    }
-                    int currentBalance = (post as int);
-                    return Transaction.success(currentBalance + addAmount);
-                  });
-
-                  if (mounted) Navigator.pop(context);
-                }
-              },
               child: const Text("LOAD", style: TextStyle(color: Colors.white)),
+              onPressed: () async {
+                if (amountController.text.isEmpty) return;
+
+                int addAmount = int.tryParse(amountController.text.trim()) ?? 0;
+
+                // ❌ MINIMUM LOAD POPUP
+                if (addAmount < 100) {
+                  showDialog(
+                    context: dialogContext,
+                    builder: (_) => AlertDialog(
+                      backgroundColor: const Color(0xFF2E1C38),
+                      title: const Text(
+                        "Invalid Load Amount",
+                        style: TextStyle(color: Colors.white),
+                      ),
+                      content: const Text(
+                        "Minimum load amount is ₱100.",
+                        style: TextStyle(color: Colors.white70),
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(dialogContext),
+                          child: const Text(
+                            "OK",
+                            style: TextStyle(color: Colors.pinkAccent),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                  return;
+                }
+
+                final dbRef = FirebaseDatabase.instanceFor(
+                  app: Firebase.app(),
+                  databaseURL: databaseUrl,
+                ).ref();
+
+                final balanceRef = dbRef.child(
+                  'balances/${widget.userRfid}/balance',
+                );
+
+                await balanceRef.runTransaction((Object? current) {
+                  int currentBalance = (current ?? 0) as int;
+                  return Transaction.success(currentBalance + addAmount);
+                });
+
+                final historyRef = dbRef.child(
+                  'balances/${widget.userRfid}/history',
+                );
+
+                await historyRef.push().set({
+                  'type': 'load',
+                  'amount': addAmount,
+                  'timestamp': DateTime.now().toIso8601String(),
+                });
+
+                Navigator.pop(dialogContext);
+
+                if (!mounted) return;
+
+                showDialog(
+                  context: context,
+                  builder: (_) => AlertDialog(
+                    backgroundColor: const Color(0xFF2E1C38),
+                    title: const Text(
+                      "Load Successful",
+                      style: TextStyle(color: Colors.white),
+                    ),
+                    content: Text(
+                      "₱$addAmount has been added to your balance.",
+                      style: const TextStyle(color: Colors.white70),
+                    ),
+                    actions: [
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.pinkAccent,
+                        ),
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text(
+                          "OK",
+                          style: TextStyle(color: Colors.white),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
             ),
           ],
         );
@@ -788,8 +888,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 }
 
-// SCREEN 4.2: PROFILE SCREEN
-class ProfileScreen extends StatelessWidget {
+// SCREEN 4.2: PROFILE SCREEN (Updated with Card Status)
+class ProfileScreen extends StatefulWidget {
   final String userName;
   final String userRfid;
 
@@ -798,6 +898,103 @@ class ProfileScreen extends StatelessWidget {
     required this.userName,
     required this.userRfid,
   });
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  bool cardEnabled = true;
+  late DatabaseReference cardRef;
+
+  @override
+  void initState() {
+    super.initState();
+    cardRef = FirebaseDatabase.instanceFor(
+      app: Firebase.app(),
+      databaseURL: databaseUrl,
+    ).ref('balances/${widget.userRfid}/cardEnabled');
+
+    // Load current card status from database
+    cardRef.onValue.listen((event) {
+      final value = event.snapshot.value;
+      if (value != null && mounted) {
+        setState(() {
+          cardEnabled = value as bool;
+        });
+      }
+    });
+  }
+
+  void toggleCardStatus(bool value) async {
+    setState(() => cardEnabled = value);
+    await cardRef.set(value);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          value ? "Card Enabled" : "Card Disabled. Toll cannot be used.",
+        ),
+      ),
+    );
+  }
+
+  void showCardDialog() {
+    bool tempStatus = cardEnabled;
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              backgroundColor: const Color(0xFF2E1C38),
+              title: const Text(
+                "Manage Card",
+                style: TextStyle(color: Colors.white),
+              ),
+              content: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    "Card Enabled",
+                    style: TextStyle(color: Colors.white),
+                  ),
+                  Switch(
+                    value: tempStatus,
+                    activeColor: Colors.pinkAccent,
+                    onChanged: (value) {
+                      setState(() => tempStatus = value);
+                    },
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text(
+                    "Cancel",
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.pinkAccent,
+                  ),
+                  onPressed: () {
+                    toggleCardStatus(tempStatus);
+                    Navigator.pop(context);
+                  },
+                  child: const Text(
+                    "SAVE",
+                    style: TextStyle(color: Colors.white),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -816,7 +1013,7 @@ class ProfileScreen extends StatelessWidget {
               ),
               const SizedBox(height: 20),
               Text(
-                userName,
+                widget.userName,
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 28,
@@ -824,18 +1021,39 @@ class ProfileScreen extends StatelessWidget {
                 ),
               ),
               Text(
-                "RFID: $userRfid",
+                "RFID: ${widget.userRfid}",
                 style: const TextStyle(color: Colors.grey, fontSize: 16),
               ),
-              const SizedBox(height: 60),
+              const SizedBox(height: 40),
+
+              // Account Settings (without card switch)
               ListTile(
                 leading: const Icon(Icons.settings, color: Colors.white),
                 title: const Text(
                   "Account Settings",
                   style: TextStyle(color: Colors.white),
                 ),
+                subtitle: const Text(
+                  "Manage your account preferences",
+                  style: TextStyle(color: Colors.grey, fontSize: 12),
+                ),
                 onTap: () {},
               ),
+
+              // NEW: Manage Card
+              ListTile(
+                leading: const Icon(Icons.credit_card, color: Colors.white),
+                title: const Text(
+                  "Manage Card",
+                  style: TextStyle(color: Colors.white),
+                ),
+                subtitle: Text(
+                  cardEnabled ? "Card is enabled" : "Card is disabled",
+                  style: const TextStyle(color: Colors.grey, fontSize: 12),
+                ),
+                onTap: showCardDialog,
+              ),
+
               ListTile(
                 leading: const Icon(Icons.help, color: Colors.white),
                 title: const Text(
@@ -844,7 +1062,10 @@ class ProfileScreen extends StatelessWidget {
                 ),
                 onTap: () {},
               ),
+
               const Spacer(),
+
+              // Logout
               SizedBox(
                 width: double.infinity,
                 height: 55,
@@ -1221,6 +1442,188 @@ class _AdminDashboardState extends State<AdminDashboard> {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// HISTORY
+class HistoryScreen extends StatelessWidget {
+  final String userRfid;
+  const HistoryScreen({super.key, required this.userRfid});
+
+  void deleteHistory(BuildContext context) async {
+    final dbRef = FirebaseDatabase.instanceFor(
+      app: Firebase.app(),
+      databaseURL: databaseUrl,
+    ).ref('balances/$userRfid/history');
+
+    await dbRef.remove();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Transaction history deleted")),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final historyRef = FirebaseDatabase.instanceFor(
+      app: Firebase.app(),
+      databaseURL: databaseUrl,
+    ).ref('balances/$userRfid/history');
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text(
+          'Transaction History',
+          style: TextStyle(
+            color: Color(0xFF69F0AE),
+            fontWeight: FontWeight.bold,
+            fontSize: 30,
+          ),
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.delete, color: Colors.white),
+            onPressed: () => deleteHistory(context),
+          ),
+        ],
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+      ),
+      body: StreamBuilder<DatabaseEvent>(
+        stream: historyRef.onValue,
+        builder: (context, snapshot) {
+          if (!snapshot.hasData || snapshot.data!.snapshot.value == null) {
+            return const Center(
+              child: Text(
+                'No transactions yet',
+                style: TextStyle(color: Colors.white),
+              ),
+            );
+          }
+
+          final data = Map<String, dynamic>.from(
+            snapshot.data!.snapshot.value as Map,
+          );
+          final sortedKeys = data.keys.toList()..sort((a, b) => b.compareTo(a));
+
+          return ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: sortedKeys.length,
+            itemBuilder: (context, index) {
+              final key = sortedKeys[index];
+              final tx = Map<String, dynamic>.from(data[key]);
+              final type = tx['type'];
+              final amount = tx['amount'];
+              final timestamp = tx['timestamp'];
+
+              IconData icon = type == 'load' ? Icons.add : Icons.remove;
+
+              return Container(
+                margin: const EdgeInsets.symmetric(vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Colors.pinkAccent, Color(0xFF69F0AE)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.2),
+                      blurRadius: 6,
+                      offset: const Offset(2, 4),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(icon, color: Colors.white),
+                    ),
+                    const SizedBox(width: 12),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.black26,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            "${type.toUpperCase()} ₱$amount",
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          timestamp,
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+}
+
+class NoInternetScreen extends StatelessWidget {
+  const NoInternetScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF181928),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: const [
+            Icon(Icons.wifi_off, color: Colors.redAccent, size: 100),
+            SizedBox(height: 20),
+            Text(
+              "No Internet Connection",
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            SizedBox(height: 10),
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 30),
+              child: Text(
+                "This app requires an internet connection.\nPlease connect to Wi-Fi or mobile data.",
+                style: TextStyle(color: Colors.white70),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ],
         ),
       ),
     );
