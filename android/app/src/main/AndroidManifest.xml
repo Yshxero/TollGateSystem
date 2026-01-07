@@ -1,6 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
-        android:label="embedded_system_tgs"
+        android:label="CPELEX TOLL SYSTEM"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
