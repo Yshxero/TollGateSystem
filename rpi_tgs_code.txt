@@ -1,0 +1,396 @@
+MInpit:
+import threading
+import time
+import RPi.GPIO as GPIO
+import lane_1
+
+
+# ================= GPIO =================
+GPIO.setmode(GPIO.BCM)
+GPIO.setwarnings(False)
+
+
+# Ultrasonic pins
+ULTRA_LANE1_TRIG = 20
+ULTRA_LANE1_ECHO = 21
+
+
+GPIO.setup(ULTRA_LANE1_TRIG, GPIO.OUT)
+GPIO.setup(ULTRA_LANE1_ECHO, GPIO.IN)
+
+
+# ================= UTILITY =================
+def measure_distance(trig, echo):
+    GPIO.output(trig, False)
+    time.sleep(0.05)
+    GPIO.output(trig, True)
+    time.sleep(0.00001)
+    GPIO.output(trig, False)
+
+
+    start = time.time()
+    stop = time.time()
+
+
+    while GPIO.input(echo) == 0:
+        start = time.time()
+    while GPIO.input(echo) == 1:
+        stop = time.time()
+
+
+    elapsed = stop - start
+    distance = elapsed * 17150
+    return round(distance, 2)
+
+
+# ================= INITIALIZE RFID =================
+lane_1.init_hardware()
+rfid_lock = threading.Lock()
+
+
+# ================= BACKGROUND SYNC THREAD =================
+def sync_worker():
+    while True:
+        try:
+            lane_1.sync_offline()
+        except Exception as e:
+            print("[SYNC ERROR]", e)
+        time.sleep(5)
+
+
+# ================= MONITOR LANE =================
+def monitor_lane1():
+    while True:
+        dist = measure_distance(ULTRA_LANE1_TRIG, ULTRA_LANE1_ECHO)
+        if 5 <= dist <= 10:
+            print("Lane 1 car detected!")
+            with rfid_lock:
+                lane_1.process_lane()
+            time.sleep(10)
+        time.sleep(1)
+
+
+# ================= MAIN =================
+try:
+    sync_thread = threading.Thread(target=sync_worker, daemon=True)
+    sync_thread.start()
+
+
+    t1 = threading.Thread(target=monitor_lane1, daemon=True)
+    t1.start()
+
+
+    while True:
+        time.sleep(1)
+
+
+except KeyboardInterrupt:
+    print("Stopping system...")
+
+
+finally:
+    lane_1.cleanup()
+    GPIO.cleanup()
+
+
+
+
+
+
+=================LANE 1===================================================
+LANE 1:
+import RPi.GPIO as GPIO
+from mfrc522 import MFRC522
+from RPLCD.i2c import CharLCD
+import time
+import json
+import os
+import socket
+from firebase_db import deduct_balance
+
+
+# ================= CONSTANTS =================
+TOLL_FEE = 100
+SERVO_PIN = 26
+LCD_ADDR = 0x27
+OFFLINE_FILE = "offline_queue.json"
+
+
+# ---------- RGB PINS ----------
+RGB_RED = 5
+RGB_GREEN = 6
+
+
+# ================= GLOBAL OBJECTS =================
+lcd = None
+reader = None
+servo = None
+
+
+# ================= INTERNET CHECK =================
+def is_online():
+    try:
+        socket.create_connection(("8.8.8.8", 53), timeout=2)
+        return True
+    except OSError:
+        return False
+
+
+# ================= OFFLINE STORAGE =================
+def save_offline(uid, amount):
+    data = []
+    if os.path.exists(OFFLINE_FILE):
+        with open(OFFLINE_FILE, "r") as f:
+            data = json.load(f)
+
+
+    data.append({
+        "uid": uid,
+        "amount": amount,
+        "timestamp": time.time()
+    })
+
+
+    with open(OFFLINE_FILE, "w") as f:
+        json.dump(data, f, indent=2)
+
+
+# ================= SYNC OFFLINE DATA =================
+def sync_offline():
+    if not is_online() or not os.path.exists(OFFLINE_FILE):
+        return
+
+
+    with open(OFFLINE_FILE, "r") as f:
+        data = json.load(f)
+
+
+    if not data:
+        return
+
+
+    remaining_data = []
+
+
+    for entry in data:
+        result = deduct_balance(entry["uid"], entry["amount"])
+        if result is False:
+            remaining_data.append(entry)
+
+
+    with open(OFFLINE_FILE, "w") as f:
+        json.dump(remaining_data, f, indent=2)
+
+
+# ================= RGB FUNCTIONS =================
+def rgb_off():
+    GPIO.output(RGB_RED, GPIO.LOW)
+    GPIO.output(RGB_GREEN, GPIO.LOW)
+
+
+def rgb_red():
+    rgb_off()
+    GPIO.output(RGB_RED, GPIO.HIGH)
+
+
+def rgb_green():
+    rgb_off()
+    GPIO.output(RGB_GREEN, GPIO.HIGH)
+
+
+# ================= HARDWARE INIT =================
+def init_hardware():
+    global lcd, reader, servo
+
+
+    GPIO.setmode(GPIO.BCM)
+    GPIO.setwarnings(False)
+
+
+    GPIO.setup(RGB_RED, GPIO.OUT)
+    GPIO.setup(RGB_GREEN, GPIO.OUT)
+    rgb_red()
+
+
+    lcd = CharLCD(
+        i2c_expander='PCF8574',
+        address=LCD_ADDR,
+        port=1,
+        cols=16,
+        rows=2,
+        charmap='A02'
+    )
+
+
+    reader = MFRC522(bus=0, device=1)
+
+
+    GPIO.setup(SERVO_PIN, GPIO.OUT)
+    servo = GPIO.PWM(SERVO_PIN, 50)
+    servo.start(0)
+
+
+# ================= SERVO CONTROL =================
+def set_servo(angle):
+    duty = 2 + (angle / 18)
+    servo.ChangeDutyCycle(duty)
+    time.sleep(0.5)
+    servo.ChangeDutyCycle(0)
+
+
+# ================= MAIN LOGIC =================
+def process_lane():
+    lcd.clear()
+    lcd.write_string("Toll Fee: 100")
+    rgb_red()
+
+
+    while True:
+
+
+        (status, _) = reader.MFRC522_Request(reader.PICC_REQIDL)
+
+
+        if status == reader.MI_OK:
+            (status, uid) = reader.MFRC522_Anticoll()
+
+
+            if status == reader.MI_OK:
+                uid_num = 0
+                for b in uid:
+                    uid_num = (uid_num << 8) | b
+                uid_str = str(uid_num)
+
+
+                print("UID detected:", uid_str)
+
+
+                # ---------- ONLINE MODE ----------
+                if is_online():
+                    remaining = deduct_balance(uid_str, TOLL_FEE)
+
+
+                    if remaining is False:
+                        lcd.clear()
+                        lcd.write_string("Denied")
+                        lcd.write_string("Scan Again")
+                        rgb_red()
+                        time.sleep(2)
+                        lcd.clear()
+                        continue
+
+
+                    lcd.clear()
+                    lcd.write_string("Access Granted")
+                    lcd.write_string(f"Bal: {remaining} pts")
+
+
+                # ---------- OFFLINE MODE ----------
+                else:
+                    save_offline(uid_str, TOLL_FEE)
+                    lcd.clear()
+                    lcd.write_string("Offline Mode")
+                    lcd.write_string("Saved Locally")
+
+
+                # ---------- OPEN GATE ----------
+                rgb_green()
+                set_servo(0)
+                time.sleep(5)
+                set_servo(60)
+                rgb_red()
+                lcd.clear()
+                break
+
+
+        time.sleep(0.2)
+
+
+# ================= CLEANUP =================
+def cleanup():
+    if servo:
+        servo.stop()
+    if lcd:
+        lcd.clear()
+
+
+    rgb_off()
+    GPIO.cleanup([SERVO_PIN, RGB_RED, RGB_GREEN])
+
+
+# ================= MAIN =================
+if __name__ == "__main__":
+    try:
+        init_hardware()
+        process_lane()
+    except KeyboardInterrupt:
+        print("Program stopped")
+    finally:
+        cleanup()
+
+
+Firebase_db.py:
+import firebase_admin
+from firebase_admin import credentials, db
+from datetime import datetime
+
+
+# ---------------- FIREBASE SETUP ----------------
+cred = credentials.Certificate(
+    "tollgateapp-5edab-firebase-adminsdk-fbsvc-0f1cbb9054.json"
+)
+
+
+if not firebase_admin._apps:
+    firebase_admin.initialize_app(cred, {
+        'databaseURL': 'https://tollgateapp-5edab-default-rtdb.asia-southeast1.firebasedatabase.app/'
+    })
+
+
+# ---------------- FUNCTIONS ----------------
+def deduct_balance(uid, fee):
+    user_balance_ref = db.reference(f'balances/{uid}/balance')
+    user_history_ref = db.reference(f'balances/{uid}/history')
+    admin_balance_ref = db.reference('balances/admin/balance')
+
+
+    current_user_balance = user_balance_ref.get()
+    admin_balance = admin_balance_ref.get() or 0
+
+
+    if current_user_balance is None:
+        print(f"[FIREBASE] UID {uid} not found")
+        return False
+
+
+    card_enabled = db.reference(f'balances/{uid}/cardEnabled').get()
+    if card_enabled is False:
+        print(f"[FIREBASE] Card disabled for {uid}")
+        return False
+
+
+    if current_user_balance >= fee:
+        remaining = current_user_balance - fee
+
+
+        user_balance_ref.set(remaining)
+        admin_balance_ref.set(admin_balance + fee)
+
+
+        user_history_ref.push({
+            "type": "toll",
+            "amount": fee,
+            "timestamp": datetime.now().isoformat()
+        })
+
+
+        print(f"[FIREBASE] Deducted {fee} from {uid}")
+        print(f"[FIREBASE] Remaining balance: {remaining}")
+
+
+        return remaining
+
+
+    else:
+        print(f"[FIREBASE] Insufficient balance for {uid}")
+        return False
